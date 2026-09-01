@@ -21,6 +21,25 @@ export async function generateReport(input: SalesInput): Promise<SalesReport> {
   return { ...(data.report as SalesReport), generatedAt: new Date().toISOString(), input };
 }
 
+// --- last-report persistence (so /results survives a refresh) ---------------
+
+const LAST_REPORT_KEY = "sos_last_report";
+
+export function saveLastReport(report: SalesReport): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(LAST_REPORT_KEY, JSON.stringify(report));
+}
+
+export function loadLastReport(): SalesReport | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(LAST_REPORT_KEY);
+    return raw ? (JSON.parse(raw) as SalesReport) : null;
+  } catch {
+    return null;
+  }
+}
+
 // Shared JSON shape description, also used server-side.
 export const REPORT_SCHEMA_HINT = `Return ONLY valid JSON (no markdown fences) with this exact shape:
 {
