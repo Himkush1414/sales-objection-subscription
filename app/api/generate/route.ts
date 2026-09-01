@@ -90,15 +90,22 @@ tight and rep-ready — no fluff.`;
 export async function POST(req: Request) {
   const key = resolveApiKey();
   if (!key) {
-    // Surface the truth in the server / Vercel function logs.
-    const visible = Object.keys(process.env)
-      .filter((k) => /GEMINI|VERCEL_ENV/i.test(k))
-      .sort();
-    console.error(
-      `[/api/generate] No Gemini API key at runtime. GEMINI/VERCEL_ENV keys present: ${
-        visible.length ? visible.join(", ") : "(none)"
-      }`,
-    );
+    // Exact picture of what the running function can actually see. Names and
+    // lengths only — never the secret value itself.
+    const rawKey = process.env.GEMINI_API_KEY;
+    const rawPublic = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+    const debug = {
+      geminiKeys: Object.keys(process.env)
+        .filter((k) => /GEMINI/i.test(k))
+        .sort(),
+      GEMINI_API_KEY_defined: typeof rawKey === "string",
+      GEMINI_API_KEY_length: rawKey?.length ?? 0,
+      GEMINI_API_KEY_trimmed_length: rawKey?.trim().length ?? 0,
+      NEXT_PUBLIC_GEMINI_API_KEY_defined: typeof rawPublic === "string",
+      vercelEnv: process.env.VERCEL_ENV ?? "(not on Vercel)",
+      deploymentUrl: process.env.VERCEL_URL ?? null,
+    };
+    console.error("[/api/generate] No usable Gemini API key:", JSON.stringify(debug));
     return NextResponse.json(
       {
         error:
@@ -106,6 +113,7 @@ export async function POST(req: Request) {
           "Locally: add GEMINI_API_KEY to .env.local and restart. " +
           "On Vercel: add GEMINI_API_KEY in Project Settings → Environment Variables " +
           "(Production + Preview), then redeploy — env-var changes only take effect on a new deployment.",
+        debug,
       },
       { status: 500 },
     );
