@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { REPORT_SCHEMA_HINT } from "@/lib/gemini";
 import type { SalesInput } from "@/types";
 
 export const runtime = "nodejs";
@@ -8,10 +7,54 @@ export const dynamic = "force-dynamic";
 // 60 is the max allowed without enabling Fluid compute.
 export const maxDuration = 60;
 
-const MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash";
+// Kept here (server-only) rather than in lib/gemini.ts so this route never
+// pulls the client helper — which references window/localStorage and a
+// relative fetch — into the serverless bundle.
+const REPORT_SCHEMA_HINT = `Return ONLY valid JSON (no markdown fences) with this exact shape:
+{
+  "headline": string,
+  "summary": string,
+  "objections": [
+    {
+      "objection": string,
+      "category": "Price" | "Timing" | "Trust" | "Authority" | "Need" | "Competition" | "Risk",
+      "whyItComesUp": string,
+      "stab": string,          // the "Stab": name the real fear behind the objection
+      "twist": string,         // the "Twist": reframe it toward the cost of inaction
+      "sixKLH": [string, string, string, string, string, string], // 6 KLH moves: Know, Like, Trust, Logic, Hope, urgency-style lines
+      "recommendedResponse": string
+    }
+  ],                            // exactly 5 objections
+  "clientQuestions": [
+    { "question": string, "suggestedAnswer": string, "followUp": string }
+  ],                            // 5 items — smart questions the buyer should be asked / will ask
+  "inactionCost": {
+    "assumptions": [string],    // 3-4 plain-language assumptions with rough numbers
+    "monthlyLoss": string,      // e.g. "₹3,20,000 / month"
+    "yearlyLoss": string,
+    "explanation": string
+  },
+  "playbook": {
+    "discoveryQuestions": [string],   // 6 items
+    "valueProps": [string],           // 4 items
+    "closingLines": [string],         // 4 items
+    "quickReference": [ { "objection": string, "oneLiner": string } ]  // 5 items
+  }
+}`;
 
-function apiKey(): string | undefined {
-  return process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY || undefined;
+/**
+ * Resolve the Gemini key at request time (never at module load, so it is read
+ * from the live serverless environment). Trims whitespace and treats a blank
+ * value as "not set".
+ */
+function resolveApiKey(): string | undefined {
+  const raw = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+  const trimmed = raw?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function resolveModel(): string {
+  return process.env.GEMINI_MODEL?.trim() || "gemini-3.6-flash";
 }
 
 function buildPrompt(input: SalesInput, transcripts: string): string {
@@ -45,10 +88,25 @@ tight and rep-ready — no fluff.`;
 }
 
 export async function POST(req: Request) {
-  const key = apiKey();
+  const key = resolveApiKey();
   if (!key) {
+    // Surface the truth in the server / Vercel function logs.
+    const visible = Object.keys(process.env)
+      .filter((k) => /GEMINI|VERCEL_ENV/i.test(k))
+      .sort();
+    console.error(
+      `[/api/generate] No Gemini API key at runtime. GEMINI/VERCEL_ENV keys present: ${
+        visible.length ? visible.join(", ") : "(none)"
+      }`,
+    );
     return NextResponse.json(
-      { error: "Gemini API key not configured. Add GEMINI_API_KEY to .env.local." },
+      {
+        error:
+          "Gemini API key not configured on the server. " +
+          "Locally: add GEMINI_API_KEY to .env.local and restart. " +
+          "On Vercel: add GEMINI_API_KEY in Project Settings → Environment Variables " +
+          "(Production + Preview), then redeploy — env-var changes only take effect on a new deployment.",
+      },
       { status: 500 },
     );
   }
@@ -65,7 +123,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Missing required fields." }, { status: 400 });
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${key}`;
+  const model = resolveModel();
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
 
   let geminiRes: Response;
   try {
