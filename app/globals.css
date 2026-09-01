@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background-color: #060b18;
+  color: #e2e8f0;
+}
+
+body {
+  min-height: 100vh;
+  background-image:
+    radial-gradient(60rem 60rem at 12% -10%, rgba(45, 212, 191, 0.08), transparent 60%),
+    radial-gradient(50rem 50rem at 110% 10%, rgba(59, 130, 246, 0.08), transparent 55%);
+  background-attachment: fixed;
+}
+
+@layer components {
+  .card {
+    @apply rounded-xl border border-white/10 bg-navy-900/70 backdrop-blur;
+  }
+
+  .input-field {
+    @apply w-full rounded-lg border border-white/10 bg-navy-950/60 px-3.5 py-2.5 text-sm
+      text-slate-100 placeholder:text-slate-500 outline-none transition
+      focus:border-teal-accent/60 focus:ring-2 focus:ring-teal-accent/20;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm
+      font-semibold transition disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-primary {
+    @apply btn bg-teal-accent text-navy-950 hover:bg-teal-300;
+  }
+
+  .btn-ghost {
+    @apply btn border border-white/15 bg-white/5 text-slate-200 hover:bg-white/10;
+  }
+
+  .label {
+    @apply mb-1.5 block text-xs font-medium uppercase tracking-wide text-slate-400;
+  }
+
+  .tab-btn {
+    @apply whitespace-nowrap rounded-lg px-3.5 py-2 text-sm font-medium text-slate-400
+      transition hover:text-slate-200;
+  }
+
+  .tab-btn-active {
+    @apply bg-teal-accent/15 text-teal-accent;
+  }
+}
+
+/* thin scrollbars for the dark UI */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
+}
+*::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: rgba(148, 163, 184, 0.3);
+  border-radius: 9999px;
+}
