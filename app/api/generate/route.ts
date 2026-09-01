@@ -7,6 +7,41 @@ export const dynamic = "force-dynamic";
 // 60 is the max allowed without enabling Fluid compute.
 export const maxDuration = 60;
 
+// Bump on every change to this file so a deployed build is visually verifiable:
+// the marker appears in the error payload and at GET /api/generate.
+const ROUTE_BUILD = "gen-route/6";
+
+/** Names + lengths + flags only — never the secret value. */
+function envReport() {
+  const rawKey = process.env.GEMINI_API_KEY;
+  const rawPublic = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+  return {
+    routeBuild: ROUTE_BUILD,
+    geminiEnvKeys: Object.keys(process.env)
+      .filter((k) => /GEMINI/i.test(k))
+      .sort(),
+    GEMINI_API_KEY_defined: typeof rawKey === "string",
+    GEMINI_API_KEY_length: rawKey?.length ?? 0,
+    GEMINI_API_KEY_trimmed_length: rawKey?.trim().length ?? 0,
+    NEXT_PUBLIC_GEMINI_API_KEY_defined: typeof rawPublic === "string",
+    model: resolveModel(),
+    vercelEnv: process.env.VERCEL_ENV ?? "(not on Vercel)",
+    deploymentUrl: process.env.VERCEL_URL ?? null,
+  };
+}
+
+/**
+ * Diagnostic: open https://<site>/api/generate in a browser. Shows exactly what
+ * this deployed function can see — no secrets, just presence/length/flags.
+ */
+export function GET() {
+  const report = envReport();
+  return NextResponse.json({
+    ok: report.GEMINI_API_KEY_trimmed_length > 0,
+    ...report,
+  });
+}
+
 // Kept here (server-only) rather than in lib/gemini.ts so this route never
 // pulls the client helper — which references window/localStorage and a
 // relative fetch — into the serverless bundle.
@@ -90,29 +125,16 @@ tight and rep-ready — no fluff.`;
 export async function POST(req: Request) {
   const key = resolveApiKey();
   if (!key) {
-    // Exact picture of what the running function can actually see. Names and
-    // lengths only — never the secret value itself.
-    const rawKey = process.env.GEMINI_API_KEY;
-    const rawPublic = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-    const debug = {
-      geminiKeys: Object.keys(process.env)
-        .filter((k) => /GEMINI/i.test(k))
-        .sort(),
-      GEMINI_API_KEY_defined: typeof rawKey === "string",
-      GEMINI_API_KEY_length: rawKey?.length ?? 0,
-      GEMINI_API_KEY_trimmed_length: rawKey?.trim().length ?? 0,
-      NEXT_PUBLIC_GEMINI_API_KEY_defined: typeof rawPublic === "string",
-      vercelEnv: process.env.VERCEL_ENV ?? "(not on Vercel)",
-      deploymentUrl: process.env.VERCEL_URL ?? null,
-    };
+    const debug = envReport();
     console.error("[/api/generate] No usable Gemini API key:", JSON.stringify(debug));
     return NextResponse.json(
       {
         error:
-          "Gemini API key not configured on the server. " +
+          `[${ROUTE_BUILD}] Gemini API key not configured on the server. ` +
           "Locally: add GEMINI_API_KEY to .env.local and restart. " +
           "On Vercel: add GEMINI_API_KEY in Project Settings → Environment Variables " +
-          "(Production + Preview), then redeploy — env-var changes only take effect on a new deployment.",
+          "(Production + Preview), then redeploy — env-var changes only take effect on a new deployment. " +
+          "Open /api/generate directly in a browser to see what this deployment can read.",
         debug,
       },
       { status: 500 },
