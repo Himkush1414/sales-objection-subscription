@@ -4,6 +4,9 @@ import type { SalesInput } from "@/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// The thinking model takes ~25-30s. Vercel Hobby defaults to a 10s cap;
+// 60 is the max allowed without enabling Fluid compute.
+export const maxDuration = 60;
 
 const MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash";
 
