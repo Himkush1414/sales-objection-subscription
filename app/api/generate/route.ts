@@ -8,8 +8,20 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 // Bump on every change to this file so a deployed build is visually verifiable:
-// the marker appears in the error payload and at GET /api/generate.
-const ROUTE_BUILD = "gen-route/6";
+// the marker appears in the error payload, the x-route-build header, and GET.
+const ROUTE_BUILD = "gen-route/7";
+
+// Abort the upstream AI call before Vercel kills the whole function, so the
+// client always gets clean JSON instead of a platform timeout page.
+const GEMINI_TIMEOUT_MS = 55_000;
+
+type JsonBody = Record<string, unknown>;
+function json(body: JsonBody, status = 200) {
+  return NextResponse.json(
+    { routeBuild: ROUTE_BUILD, ...body },
+    { status, headers: { "x-route-build": ROUTE_BUILD } },
+  );
+}
 
 /** Names + lengths + flags only — never the secret value. */
 function envReport() {
@@ -36,10 +48,7 @@ function envReport() {
  */
 export function GET() {
   const report = envReport();
-  return NextResponse.json({
-    ok: report.GEMINI_API_KEY_trimmed_length > 0,
-    ...report,
-  });
+  return json({ ok: report.GEMINI_API_KEY_trimmed_length > 0, ...report });
 }
 
 // Kept here (server-only) rather than in lib/gemini.ts so this route never
@@ -127,7 +136,7 @@ export async function POST(req: Request) {
   if (!key) {
     const debug = envReport();
     console.error("[/api/generate] No usable Gemini API key:", JSON.stringify(debug));
-    return NextResponse.json(
+    return json(
       {
         error:
           `[${ROUTE_BUILD}] Gemini API key not configured on the server. ` +
@@ -137,7 +146,7 @@ export async function POST(req: Request) {
           "Open /api/generate directly in a browser to see what this deployment can read.",
         debug,
       },
-      { status: 500 },
+      500,
     );
   }
 
@@ -145,22 +154,27 @@ export async function POST(req: Request) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+    return json({ error: "Invalid request body." }, 400);
   }
 
   const { input, transcripts = "" } = body;
   if (!input || !input.product || !input.industry) {
-    return NextResponse.json({ error: "Missing required fields." }, { status: 400 });
+    return json({ error: "Missing required fields." }, 400);
   }
 
   const model = resolveModel();
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+
+  const started = Date.now();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
 
   let geminiRes: Response;
   try {
     geminiRes = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
       body: JSON.stringify({
         contents: [{ role: "user", parts: [{ text: buildPrompt(input, transcripts) }] }],
         generationConfig: {
@@ -175,15 +189,31 @@ export async function POST(req: Request) {
         },
       }),
     });
-  } catch {
-    return NextResponse.json({ error: "Could not reach the Gemini API." }, { status: 502 });
+  } catch (err) {
+    clearTimeout(timer);
+    const timedOut = err instanceof Error && err.name === "AbortError";
+    return json(
+      {
+        error: timedOut
+          ? `The AI took longer than ${GEMINI_TIMEOUT_MS / 1000}s and was cancelled. Try again — it is usually faster on a warm function.`
+          : "Could not reach the Gemini API.",
+        elapsedMs: Date.now() - started,
+      },
+      timedOut ? 504 : 502,
+    );
   }
+  clearTimeout(timer);
 
   if (!geminiRes.ok) {
     const detail = await geminiRes.text();
-    return NextResponse.json(
-      { error: `Gemini API error (${geminiRes.status}). ${detail.slice(0, 300)}` },
-      { status: 502 },
+    console.error(`[/api/generate] Gemini ${geminiRes.status}: ${detail.slice(0, 500)}`);
+    return json(
+      {
+        error: `Gemini API error (${geminiRes.status}). ${detail.slice(0, 300)}`,
+        geminiStatus: geminiRes.status,
+        model,
+      },
+      502,
     );
   }
 
@@ -193,7 +223,12 @@ export async function POST(req: Request) {
     payload?.candidates?.[0]?.content?.parts?.[0]?.text;
 
   if (!text) {
-    return NextResponse.json({ error: "Gemini returned an empty response." }, { status: 502 });
+    const finish = payload?.candidates?.[0]?.finishReason;
+    console.error(`[/api/generate] Empty text. finishReason=${finish}`, JSON.stringify(payload).slice(0, 500));
+    return json(
+      { error: `Gemini returned an empty response (finishReason: ${finish ?? "unknown"}).` },
+      502,
+    );
   }
 
   const cleaned = text.trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
@@ -202,11 +237,8 @@ export async function POST(req: Request) {
   try {
     report = JSON.parse(cleaned);
   } catch {
-    return NextResponse.json(
-      { error: "Could not parse the AI response. Please try again." },
-      { status: 502 },
-    );
+    return json({ error: "Could not parse the AI response. Please try again." }, 502);
   }
 
-  return NextResponse.json({ report });
+  return json({ report, elapsedMs: Date.now() - started });
 }
