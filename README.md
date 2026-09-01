@@ -34,7 +34,7 @@ Get a free key at https://aistudio.google.com/app/apikey.
 | ----------------------------- | -------- | -------------------------------------------------- |
 | `GEMINI_API_KEY`              | yes\*    | Server-only. Preferred.                            |
 | `NEXT_PUBLIC_GEMINI_API_KEY`  | no       | Fallback, supported for the assignment brief.      |
-| `GEMINI_MODEL`                | no       | Defaults to `gemini-2.0-flash`.                    |
+| `GEMINI_MODEL`                | no       | Defaults to `gemini-3.6-flash`.                    |
 
 \* At least one of the two key variables must be set.
 

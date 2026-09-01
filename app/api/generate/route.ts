@@ -5,7 +5,7 @@ import type { SalesInput } from "@/types";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+const MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash";
 
 function apiKey(): string | undefined {
   return process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY || undefined;
@@ -72,9 +72,14 @@ export async function POST(req: Request) {
       body: JSON.stringify({
         contents: [{ role: "user", parts: [{ text: buildPrompt(input, transcripts) }] }],
         generationConfig: {
-          temperature: 0.8,
+          // NOTE: gemini-3.6-flash does not accept custom sampling params.
+          // temperature / topK / topP are silently ignored, and
+          // frequencyPenalty / presencePenalty return a 400 — so none are sent.
           responseMimeType: "application/json",
-          maxOutputTokens: 4096,
+          // 3.6-flash is a thinking model: reasoning shares this budget, so
+          // keep it generous and hold thinking to "low" for structured output.
+          maxOutputTokens: 8192,
+          thinkingConfig: { thinkingLevel: "low" },
         },
       }),
     });
