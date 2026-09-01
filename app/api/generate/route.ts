@@ -5,7 +5,7 @@ import type { SalesInput } from "@/types";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const MODEL = process.env.GEMINI_MODEL || "gemini-1.5-flash";
+const MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
 
 function apiKey(): string | undefined {
   return process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY || undefined;

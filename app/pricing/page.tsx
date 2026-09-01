@@ -4,8 +4,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Loader2, Minus } from "lucide-react";
 import type { PlanId } from "@/types";
-import { PLAN_ORDER, PLANS } from "@/lib/subscription";
 import {
+  PLAN_ORDER,
+  PLANS,
   markTrialUsed,
   trialAlreadyUsed,
   upgradeToPlan,

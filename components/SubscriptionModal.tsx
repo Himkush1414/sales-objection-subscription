@@ -2,9 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { ArrowRight, Sparkles, X } from "lucide-react";
-import { PLAN_ORDER, PLANS } from "@/lib/subscription";
+import { PLAN_ORDER, PLANS, trialAlreadyUsed } from "@/lib/subscription";
 import { useSession } from "@/components/SessionProvider";
-import { trialAlreadyUsed } from "@/lib/subscription";
 
 export function SubscriptionModal({
   open,

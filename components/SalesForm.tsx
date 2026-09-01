@@ -185,7 +185,7 @@ export function SalesForm() {
       <SubscriptionModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        reason="You&apos;re out of tokens for this period."
+        reason="You're out of tokens for this period."
       />
     </>
   );
